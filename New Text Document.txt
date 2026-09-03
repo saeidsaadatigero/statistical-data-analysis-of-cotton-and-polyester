@@ -1,0 +1,350 @@
+I'll start by exploring the Excel file.
+
+  Ran 1 shell command
+
+Note: the actual file is 9هیحالصا - اه هچراپ و اه کود.xlsx (spaces, not underscores). Installing packages:
+
+  Ran 1 shell command
+
+Network is blocked by the sandbox. Retrying with network access:
+
+  Ran 2 shell commands
+
+PyPI is unreachable but a mirror works. Installing:
+
+  Ran 1 shell command
+
+Now STEP 1 — exploring the workbook:
+
+  Ran 1 shell command
+
+Found the two main data sheets. Let me dump them in full:
+
+  Ran 1 shell command
+
+Data structure is clear: 18 experimental runs per fabric (2 yarn counts × 3 tension levels × 3 replicates), plus control/spool rows to exclude. Let me load chart guidance before building the visuals.
+
+● Skill(dataviz)
+Successfully loaded skill
+
+  Ran 2 shell commands
+
+Palette validated. Now the full analysis pipeline:
+
+  Ran 1 shell command
+
+Clean balanced design: 36 samples, 72 observations. Now STEP 2 — descriptive statistics:
+
+  Ran 1 shell command
+
+Now the formatted Excel export and the charts:
+
+  Ran 2 shell commands
+
+Shell quoting choked on the heredoc; writing the file directly instead:
+
+● Write(charts_part.py)
+Wrote 138 lines to charts_part.py
+
+# ================================ STEP 3 : CHARTS ================================
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+from matplotlib.ticker import MultipleLocator
+
+SURFACE = '#fcfcfb'; INK = '#1a1a19'; INK2 = '#5c5c58'; GRID = '#e4e4e0'
+BLUE, ORANGE, AQUA = '#2a78d6', '#eb6834', '#1baf7a'
+plt.rcParams.update({
+… +128 lines
+
+  Ran 1 shell command
+
+The glob now picks up my output file. Fixing the source selection:
+
+  Ran 1 shell command
+
+Let me eyeball two of the charts before moving on:
+
+  Read 1 file
+
+Charts look clean. Now STEP 4 — ANOVA:
+
+● Write(anova_part.py)
+Wrote 101 lines to anova_part.py
+
+# ================================ STEP 4 : ANOVA ================================
+ALPHA = 0.05
+
+def eta_sq(groups):
+    all_v = np.concatenate(groups)
+    gm = all_v.mean()
+    ss_b = sum(len(g) * (g.mean() - gm) ** 2 for g in groups)
+    ss_t = ((all_v - gm) ** 2).sum()
+    return ss_b / ss_t if ss_t else np.nan
+… +91 lines
+
+  Ran 1 shell command
+
+Normality fails throughout (shrinkage is recorded in coarse 0.5% steps), so I'll add non-parametric confirmation before writing the report:
+
+● Write(np_part.py)
+Wrote 26 lines to np_part.py
+
+# ------------- Non-parametric confirmation (data are recorded in coarse 0.5 % steps) -------------
+def kw(factor, scope, groups_dict):
+    groups = [np.asarray(v, dtype=float) for v in groups_dict.values()]
+    H, p = stats.kruskal(*groups)
+    return dict(Factor=factor, Scope=scope, H=round(H, 3),
+                p_str=('< 0.001' if p < 0.001 else f'{p:.4f}'),
+                Verdict='Significant difference exists' if p < ALPHA else 'No significant difference')
+
+NP_RESULTS = pd.DataFrame([
+… +16 lines
+
+  Ran 1 shell command
+
+All ANOVA conclusions hold non-parametrically. Now STEP 5 — the Word report:
+
+● Write(report_part.py)
+Wrote 330 lines to report_part.py
+
+# ================================ STEP 5 : WORD REPORT ================================
+from docx import Document
+from docx.shared import Pt, Cm, RGBColor
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
+from docx.enum.table import WD_TABLE_ALIGNMENT
+from docx.enum.section import WD_SECTION
+from docx.oxml.ns import qn
+from docx.oxml import OxmlElement
+import datetime
+… +320 lines
+
+  Ran 1 shell command
+
+Let me verify the report renders correctly:
+
+  Ran 1 shell command
+
+All five steps are complete. Everything ran end-to-end from analysis.py.
+
+What the data turned out to be
+
+The workbook has 6 sheets; two carry the seam measurements (رتسا یلپ هنومن ,هبنپ هنومن), four describe the yarn spools and base fabric construction. After dropping the unsewn Control rows and bare-spool rows (those hold assessor ratings, not measured percentages), the design is perfectly balanced: 2 fabrics × 2 yarn counts (Ne 20/40) × 3 tension levels (دایز/طسوتم/مک) × 3 replicates = 36 specimens, each measured after wash 1 and wash 2 → 72 observations, no missing values.
+
+Key results
+
+┌────────────────────┬─────────────────┬─────────┬───────┬─────────────────────────────────────────────────┐
+│       Factor       │        F        │    p    │  η²   │                     Verdict                     │
+├────────────────────┼─────────────────┼─────────┼───────┼─────────────────────────────────────────────────┤
+│ Fabric type        │ F(1,70) = 45.44 │ < 0.001 │ 0.394 │ Significant — cotton 2.38 % vs polyester 0.90 % │
+├────────────────────┼─────────────────┼─────────┼───────┼─────────────────────────────────────────────────┤
+│ Seam tension       │ F(2,69) = 3.21  │ 0.047   │ 0.085 │ Significant (pooled)                            │
+├────────────────────┼─────────────────┼─────────┼───────┼─────────────────────────────────────────────────┤
+│ Wash number        │ F(1,70) = 16.62 │ < 0.001 │ 0.192 │ Significant — 1.13 % → 2.15 %                   │
+├────────────────────┼─────────────────┼─────────┼───────┼─────────────────────────────────────────────────┤
+│ Yarn count (extra) │ F(1,70) = 0.80  │ 0.373   │ 0.011 │ Not significant                                 │
+└────────────────────┴─────────────────┴─────────┴───────┴─────────────────────────────────────────────────┘
+
+Two findings worth your attention beyond the requested tests:
+- The tension effect is entirely a polyester phenomenon. Split by fabric: polyester F(2,33) = 13.10, p < 0.001; cotton F(2,33) = 0.44, p = 0.65. Post-hoc (Bonferroni) localises it at the high setting only — low-vs-medium never differs. In cotton, fibre swelling swamps the stitch-tension contribution.
+- Washes are repeated measures on the same specimens, so the requested one-way ANOVA treats paired data as independent (conservative). I ran it as asked and added a paired t-test: +1.03 ± 0.64 pp, t(35) = 9.59, p < 0.001 — all 36 specimens shrank further at wash 2.
+
+Normality (Shapiro-Wilk) fails almost everywhere because shrinkage is recorded on a discrete 0.5 % grid, so I re-ran everything as Kruskal-Wallis. Every conclusion is reproduced — none depends on the normality assumption.
+
+Files written
+
+- Seam_Shrinkage_Report.docx — title page, 12 tables, 7 embedded charts, ANOVA interpretation, conclusion
+- Descriptive_Statistics.xlsx — 7 formatted descriptive sheets + ANOVA, post-hoc, Kruskal-Wallis, tidy data
+- fig1–fig7*.png — 300 dpi
+- tidy_data_long.csv / tidy_data_wide.csv, analysis.py (fully reproducible)
+
+Two notes: your filename uses spaces, not underscores (9هیحالصا - اه هچراپ و اه کود.xlsx) — no issue, just flagging it. And PyPI was unreachable from this machine; packages installed from the Tsinghua mirror instead. Chart labels are English, as you allowed — Persian axis text needs bidi shaping that renders inconsistently in embedded PNGs, and the Persian terminology is kept in the report body.
+
+✻ Churned for 30m 16s · done 9:50 PM
+
+※ recap: Goal was a full statistical analysis of seam shrinkage in cotton vs polyester; all five steps are done and the Word report, Excel tables, and seven charts are written to your project folder. Nothing pending unless you want revisions. (disable recaps in /config)
+
+❯  یسراف هب ور اهلیاف و اهسکع همه و نک تسرد نیشرپ هشوپ هی و متسه یچ زیچ همه و اهرادومن هک همهفب وجشناد هک سیونب یسراف نابز هب هژورپ هئارا و وجشناد دوخ هعلاطم یارب ور هژورپ لماک تاحیزوت و نک هفاضا word لیاف هیسیونب مه
+
+.دنک راک تسرد matplotlib رد فورح یهدل‌کش و یسراف تنوف هک منکی‌م یسررب لوا .مزاسی‌م
+
+  Ran 3 shell commands
+
+.مزاسی‌م ار یسراف یاهی‌جورخ الاح .تسا دوجوم متسیس یور )B Nazanin، B Titr( درادناتسا یسراف یاهت‌نوف — یلاع
+
+● Write(persian_outputs.py)
+Wrote 284 lines to persian_outputs.py
+# -*- coding: utf-8 -*-
+""".هئارا/هعلاطم یامنهار و شرازگ ،لسکا لودج ،اهرادومن :یسراف لماک یه‌خسن تخاس"""
+import os, io, contextlib, datetime
+import numpy as np, pandas as pd
+
+--- دنشاب ناسکی اًقیقد دادعا ات میریگی‌م یلصا تپیرکسا زا ار تابساحم --- #
+with contextlib.redirect_stdout(io.StringIO()):
+    import analysis as A
+
+long, wide = A.long, A.wide
+… +274 lines
+
+  Ran 1 shell command
+
+The English .docx is currently open in Word, which locked it. I'll make the Persian script tolerant of that:
+
+● Update(persian_outputs.py)
+Added 12 lines, removed 1 line
+import numpy as np, pandas as pd
+
+--- دنشاب ناسکی اًقیقد دادعا ات میریگی‌م یلصا تپیرکسا زا ار تابساحم --- #
+                                                                                                                زاب Word رد یسیلگنا یجورخ لیاف رگا ات مینکی‌م ارجا نامدوخ مانی‌اضف رد ار تپیرکسا #
+                                                                                                                .)تسا هدش ماجنا یزاسه‌ریخذ زا شیپ تابساحم یه‌مه( دورن تسد زا تابساحم ،دشاب لفق و #
+class _A:  # یلصا تپیرکسا مانی‌اضف یه‌دنراده‌گن
+    pass
+
+_ns = {'__name__': '__analysis_core__', '__file__': 'analysis.py'}
+with contextlib.redirect_stdout(io.StringIO()):
+    import analysis as A
+    try:
+        exec(compile(open('analysis.py', encoding='utf-8').read(), 'analysis.py', 'exec'), _ns)
+    except PermissionError as e:
+        print(f'[رادشه] )تسا زاب لیاف( دشن نکمم یسیلگنا یجورخ یسیونزاب: {e.filename}')
+A = _A()
+A.__dict__.update(_ns)
+
+long, wide = A.long, A.wide
+TABLES, anova_df, posthoc_df, NP_RESULTS, paired = A.TABLES, A.anova_df, A.posthoc_df, A.NP_RESULTS, A.paired
+
+  Ran 1 shell command
+
+Let me verify a Persian chart renders correctly:
+
+  Read 1 file
+
+Letters are double-reversed — matplotlib 3.11 appears to do its own RTL shaping. Let me test rendering raw text without the reshaper:
+
+  Read 1 file, ran 1 shell command
+
+matplotlib 3.11 has native Arabic shaping — the reshaper was double-processing. Fixing that and adding font fallback for Latin glyphs:
+
+  Ran 2 shell commands
+
+● API Error: Connection dropped (ECONNRESET)
+
+✻ Churned for 22m 28s · done 10:33 PM
+
+● Remote Control disconnected — Transport closed: a network edge refused the connection before it reached Anthropic's server (HTTP 403 — Anthropic's CDN enforcing a region or network policy, or a Cloudflare gateway on this network) rather than this session; this often follows a VPN or network change, and kept refusing for 3 minutes
+
+❯ ور سکع نیا نک شتسرد افطل هدش پاچ لوا هب رخآ زا یسراف فورح png.خن-هرمن_7رادومن رد طقف
+
+● API Error: Connection dropped (ECONNRESET)
+
+✻ Baked for 11m 9s · done 10:47 PM
+
+❯ نک تسرد افطل هدش هتشون لوا هب رخآ زا یسراف فورحرpng.خن-هرمن_7رادومن سکع رد طقف
+
+:منکی‌م یسررب ار اطخ تلع .تسا هدنام یقاب )بویعم یه‌خسن( یلبق یارجا زا ،نتشون یاطخ لیلد هب ۷ رادومن لیاف
+
+  Ran 2 shell commands
+
+:دننکن فقوتم ار ارجا ،هدافتسا لاح رد زِاب ای هدنامزاب یاهل‌یاف ات منکی‌م مواقم ار تپیرکسا .دش دازآ نونکا ؛دوب هدنام لفق لیاف
+
+  Ran 1 shell command
+
+:منکی‌م یسررب ار ۷ رادومن الاح
+
+  Read 1 file
+
+:دراد یئزج لخادت یقفا روحم ناونع اب امنهار و )تسا یفاک شدوخ »دصرد« یه‌ملک( دوشی‌م هداد شیامن دب پچه‌بت‌سار نتم رد % تمالع :منکی‌م لامعا مه رگید یرهاظ حالصا ود .تسا تسرد نونکا ۷ رادومن
+
+  Read 1 file, ran 1 shell command
+
+:هئارا/هعلاطم لماک یامنهار و شرازگ — مزاسی‌م ار یسراف Word دنس ود الاح .دنتسه تسرد یسراف یاهرادومن یه‌مه
+
+● Write(persian_docs_part.py)
+Wrote 171 lines to persian_docs_part.py
+
+============================ )پچه‌بت‌سار( یسراف دنس تخاس یاهرازبا ============================ #
+from docx import Document
+from docx.shared import Pt, Cm, RGBColor
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
+from docx.enum.table import WD_TABLE_ALIGNMENT
+from docx.oxml.ns import qn
+from docx.oxml import OxmlElement
+
+NAVY, BLUEC, GREY = RGBColor(0x0D, 0x36, 0x6B), RGBColor(0x1C, 0x5C, 0xAB), RGBColor(0x5C, 0x5C, 0x58)
+… +161 lines
+
+Now the Persian statistical report:
+
+● Write(persian_report_part.py)
+Wrote 171 lines to persian_report_part.py
+
+============================ یرامآ لیلحت شرازگ :۱ دنس ============================ #
+doc = new_doc()
+for _ in range(4):
+    doc.add_paragraph()
+P(doc, 'یرامآ لیلحت شرازگ', size=12, bold=True, color=BLUEC, align=WD_ALIGN_PARAGRAPH.CENTER, after=4)
+P(doc, 'تخود یگتفربآ رب هچراپ و خن یاهرتماراپ رثا', size=24, bold=True, color=NAVY,
+  align=WD_ALIGN_PARAGRAPH.CENTER, font=FA_TITLE_FONT, after=8)
+P(doc, 'مود و لوا یوشتسش زا سپ رتسای‌لپ و هبنپ یاهه‌چراپ یه‌سیاقم', size=15, italic=True,
+  color=GREY, align=WD_ALIGN_PARAGRAPH.CENTER, after=36)
+… +161 lines
+
+  Ran 1 shell command
+
+Now the main deliverable — the complete study & presentation guide for the student:
+
+● Write(persian_guide_part.py)
+Wrote 398 lines to persian_guide_part.py
+
+============================ وجشناد یارب هژورپ لماک یامنهار :۲ دنس ============================ #
+g = new_doc()
+for _ in range(4):
+    g.add_paragraph()
+P(g, 'هئارا و هعلاطم یامنهار', size=12, bold=True, color=BLUEC, align=WD_ALIGN_PARAGRAPH.CENTER, after=4)
+P(g, 'هداس نابز هب هژورپ لماک حیضوت', size=24, bold=True, color=NAVY,
+  align=WD_ALIGN_PARAGRAPH.CENTER, font=FA_TITLE_FONT, after=8)
+P(g, 'رتسای‌لپ و هبنپ یاهه‌چراپ رد تخود یگتفربآ رب هچراپ و خن یاهرتماراپ رثا', size=15,
+  italic=True, color=GREY, align=WD_ALIGN_PARAGRAPH.CENTER, after=10)
+… +388 lines
+
+  Ran 1 shell command
+
+Let me verify both documents:
+
+  Ran 2 shell commands
+
+.دش هدامآ زیچه‌مه
+
+دش حالصا ۷ رادومن
+
+ یلو ،مدرک فرطرب اهرادومن یه‌مه یارب ار داریا نیا .دشی‌م سکعرب رابود نتم و دادی‌م ماجنا ار راک نیا مه arabic-reshaper یه‌ناخباتک اما ،دنکی‌م پچه‌بت‌سار و دنابسچی‌م ار یسراف فورح شدوخ ۳.۱۱ یه‌خسن matplotlib :لکشم تلع.تسا تسرد نآ نتم و دش یزاسزاب و دازآ لیاف الاح .دوب هدنام یقاب یلبق بویعم یه‌خسن ،ریوصت کی نامه اهنت لیلد نیمه هب — دشن هریخذ و دوب لفق png.خن-هرمن_7رادومن لیاف ،دیلوتزاب ماگنه
+
+ مه ار تپیرکسا .دنکن لخادت یقفا روحم ناونع اب ات تفر رتن‌ییاپ یمک اهگ‌نر یامنهار و ،دش نیزگیاج »دصرد« یه‌ژاو اب هک دشی‌م هدید اجه‌باج پچه‌بت‌سار نتم رد % تمالع :مدرک لامعا اهرادومن یه‌مه یور مه رگید یرهاظ حالصا ود.دهدی‌م یسراف نشور مایپ ،گنگ یاطخ یاجه‌ب ،دشاب زاب Excel ای Word رد یلیاف رگا :مدرک مواقم
+
+یسراف هب اهی‌جورخ یه‌مه — Persian یه‌شوپ
+
+:وجشناد دوخ یه‌علاطم یارب ؛دیتساوخ هک یزیچ نامه — )ریوصت ۷ ،لودج ۶ ،فارگاراپ ۱۷۰( docx.هژورپ_لماک_یامنهار .۱
+- دهدی‌م خر ارچ و تسیچ تخود یگتفربآ
+- )لوا رارکت ،مک ششک ،Ne 20 ،هبنپ ینعی C20L-1( اهه‌نومن دک ینعم و لسکا لیاف گربراک شش حرش
+- ارچ و دش فذح ییاهه‌داد هچ و ،تفربآ دصرد لومرف ،هنومن ۳۶ اًقیقد ارچ
+- یجوز t ،سیلاو-لاکسورک ،کلیو-وریپاش و نیولِ ،ینورفنوب ،عبرم اتا ،F هرامآ ،)جیار هابتشا ود و( p تسرد ینعم ،رفص ضرف ،اطخ یه‌لیم :هداس نابز هب یرامآ میهافم
+- کی ره یارب »هئارا یه‌تکن« کی و ،دوش هدناوخ روطچ ،دیوگی‌م هچ مادک ره :رادومن تفه کتک‌ت حیضوت
+- )دراد رثا رتسای‌لپ یور طقف ششک ارچ ،دوشی‌م عمج رتشیب هبنپ ارچ( جیاتن ینف ریسفت
+- هدامآ خساپ اب رواد لمتحم شسرپ ۸ لودج و ،ندرکظ‌فح یارب یدیلک یه‌لمج هس ،دیالسا هد یداهنشیپ راتخاس ،اهت‌یدودحم
+
+)یریگه‌جیتن ،ناونع یه‌حفص ،رادومن ۷ ،لودج ۱۲( یسراف یمسر شرازگ — docx.یرامآ_لیلحت_شرازگ .۲
+
+پچه‌بت‌سار یامن ،یسراف نوتس و ناونع اب گربراک xlsx — ۱۱.اهن‌ومزآ_جیاتن_و_یفیصوت_رامآ .۳
+
+)dpi ۳۰۰( یسراف نتم و مان اب PNG رادومن تفه .۴
+
+ python تسا یفاک دوش حالصا هیلوا یه‌داد رگا سپ ،دنیآی‌م نوریب تابساحم نامه لد زا راکدوخ تروصه‌ب نتم دادعا یه‌مه .)bidiVisual اب اهل‌ودج ،B Titr نیوانع ،B Nazanin تنوف( دناپ‌چه‌بت‌سار اًلماک Word دنس ود رهpersian_outputs.py دنوش زوره‌ب مه اب رادومن و لودج ،نتم ات دینک ارجا هرابود ار.
+
+.ناشدیدنبب لوا ،دینک ارجا ار تپیرکسا هرابود دیتساوخ رگا — )تسه هشوپ رد $~ تقوم یاهل‌یاف( دیاه‌درک زاب الاح نیمه ار Word دنس ود ره :هتکن کی
+
+✻ Churned for 44m 42s · done 11:34 PM
+
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents                                                                                                                                                /rc failed
